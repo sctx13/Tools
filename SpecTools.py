@@ -112,9 +112,11 @@ def get_ScanCommandType(sf,scannumber):
 def get_ScanCommandField(sf,scannumber):
 	"""
 	Return the command line of the scan
+	@param sf : specfile object
+	@param scannumber : number of the scan
 	"""
 	specscan = sf.select(str(scannumber))
-	scan_command_field = specscan.header('S')
+	scan_command_field = specscan.header('S')[0]
 	return scan_command_field
 
 def get_MeshShape(sf,scannumber):
@@ -165,6 +167,13 @@ def findCalibrationConfigs(sf):
 def get_EnergyOfScan(sf,scannumber):
 	#Energy is set in [keV]
 	return float(get_ScanValueInSpecHeaderComment(sf,scannumber,'#C qq.mono.energy'))
+
 def get_WavelengthOfScan(sf,scannumber):
 	# Wavelength is written in [angström] and is returned in [nm]
-	return float(get_ScanValueInSpecHeaderComment(sf,scannumber,'#C qq.mono.lambda'))/10	
+	return float(get_ScanValueInSpecHeaderComment(sf,scannumber,'#C qq.mono.lambda'))/10
+
+def print_ScanCommandList(sf):
+	# Print the list of the command of each scan entered in the spec file
+	scan_numbers = get_NumberOfScans(sf)
+	for sc in range(1,scan_numbers+1):
+		print get_ScanCommandField(sf,sc)

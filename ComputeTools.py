@@ -41,20 +41,33 @@ def CreateScanDataFileList(wdname,sf,scannumber):
 	filelist = [fdname + fprefix + str(val).zfill(4) + '.edf' for val in range(0,nbmeas)]
 	return filelist
 
-def CreateCompositeFromScan(wdname,sf,scannumber,roi=((0,0),(512,512))):
+def CreateCompositeFromScan(wdname,sf,scannumber,background=None,roi=((0,0),(512,512))):
 	"""
-	TODO
+	Create a composite image of a large 2D nparray obtained during a mesh or a scan
+	@param     wdname: working directory name
+	@type      wdname: string
+	@param         sf: specfile object
+	@type          sf: specfile object
+	@param scannumber: number of the scan to use
+	@type  scannumber: string or integer
+	@param background: set a background image compatible with the images size of the scan
+	@type  background: numpy 2D array
+	@param        roi: tuple of region of interest in the image
+	@type         roi: tuple of 2 tuple of integer
 	"""
 	# TODO : display a statut bar on file number to display or else 
 	# TODO : arrange to get the binning value in the roi
 	# TODO : arrange this to fill in the composite according to positions
 	# Create the list of the specified scan :
 	filelist = CreateScanDataFileList(wdname,sf,scannumber)
-	print filelist[0]
-	print filelist[-1]
+	#print filelist[0]
+	#print filelist[-1]
 	# Retrieve the size of the image :
 	ImShape = fabio.open(filelist[0]).data.shape
-	print ImShape
+	# Handle background image :
+	if background == None:
+		print "No background specified !"
+		background = numpy.zeros(ImShape)
 	ImSize = ImShape #Necessary for ROI implementation
 	# Create specimen position definition list
 	scan_command_field = SpecTools.get_ScanCommandField(sf,scannumber)
@@ -63,7 +76,7 @@ def CreateCompositeFromScan(wdname,sf,scannumber,roi=((0,0),(512,512))):
 		# Get the number of images :
 		MeshShape = (int(scan_command_field.split()[6])+1,int(scan_command_field.split()[10])+1)
 		# Create an zero array of the composite image :
-		CompositeArray = numpy.zeros((MeshShape[0]*ImShape[0],MeshShape[1]*ImShape[1]))
+		CompositeArray = numpy.zeros((MeshShape[0]*ImSize[0],MeshShape[1]*ImSize[1]))
 		print "Empty Composite image of (%i,%i) shape created."%(CompositeArray.shape[0],CompositeArray.shape[1])
 		# Get the positions of each image along Motor1 and Motor2
 		Motor1   = scan_command_field.split()[3]
@@ -84,37 +97,69 @@ def CreateCompositeFromScan(wdname,sf,scannumber,roi=((0,0),(512,512))):
 			idx1 = int(Deltax1 / Delta1)
 			idx2 = int(Deltax2 / Delta2)
 			imdata = fabio.open(impath).data
-			CompositeArray[0+idx1*ImSize[0]:(ImSize[0]-1)+idx1*ImSize[0]+1,0+idx2*ImSize[1]:(ImSize[1]-1)+idx2*ImSize[1]+1] = imdata
+			CompositeArray[0+idx1*ImSize[0]:(ImSize[0]-1)+idx1*ImSize[0]+1,0+idx2*ImSize[1]:(ImSize[1]-1)+idx2*ImSize[1]+1] = imdata - background
 			idx = idx+1
-	"""if scan_command_type == 'mesh':
-		Motor1   = scan_command_field.split()[3]
-		Motor2   = scan_command_field.split()[7]
-		print "Mesh type along (%s,%s)"%(Motor1,Motor2)
-		SpecimenPosition1 = SpecTools.get_ScanMeasurement(sf,scannumber,Motor1)
-		SpecimenPosition2 = SpecTools.get_ScanMeasurement(sf,scannumber,Motor2)
-		print SpecimenPosition1,SpecimenPosition2
-		SpecimenPosition = [SpecimenPosition1,SpecimenPosition2]
-		#idx = 1 
-		#for impath in filelist[1::]:
-	#		Disp1 = SpecimenPosition1[idx] - SpecimenPosition1[idx-1]
-	#		Disp2 = SpecimenPosition2[idx] - SpecimenPosition2[idx-1]
-	#		imdata = fabio.open(impath).data
-	#		if Disp1 < 0 and Disp2 == 0:# Following horizontal line
-	#			CompositeArray = numpy.hstack((CompositeArray,imdata))
-	#		if Disp1 > 0 and Disp2 > 0:
-	#			CompositeArray = numpy.vstack((CompositeArray,imdata))
-	#		idx = idx+1
 	elif scan_command_type == 'ascan':
-		Motor1 = scan_command_field[0].split()[3]
-		SpecimenPosition = SpecTools.get_ScanMeasurement(sf,scannumber,Motor1)
-		if SpecimenPosition[1] - SpecimenPosition[0] > 0:
-			SpecimenDisplacement = 1#Positive direction
-			for imagepath in filelist[1::]:
-				imdata = fabio.open(imagepath).data
-				CompositeArray = numpy.hstack((CompositeArray,imdata)) 
-		else:
-			SpecimenDisplacement = -1#Negative direction
-	else:
-		SpecimenPosition = 0
-	"""
+		ScanShape = int(scan_command_field.split()[6])+1
+		Motor = scan_command_field.split()[3]
+		if Motor == 'nny' or 'stry':
+			# Case of horizontal scan : 
+			SpecimenPosition = SpecTools.get_ScanMeasurement(sf,scannumber,Motor)
+			if SpecimenPosition[1] - SpecimenPosition[0] > 0:
+				CompositeArray = fabio.open(filelist[0]).data
+				for impath in filelist[0::]:
+					imdata = fabio.open(impath).data
+					CompositeArray = numpy.hstack([CompositeArray,imdata])
+			elif SpecimenPosition[1] - SpecimenPosition[0] < 0:
+				CompositeArray = fabio.open(filelist[0]).data
+				for impath in filelist[0::]:
+					imdata = fabio.open(impath).data
+					CompositeArray = numpy.hstack([imdata,CompositeArray])
+		if Motor == 'nnz' or 'strz':
+			# Case of vertical scan : 
+			SpecimenPosition = SpecTools.get_ScanMeasurement(sf,scannumber,Motor)
+			if SpecimenPosition[1] - SpecimenPosition[0] > 0:
+				CompositeArray = fabio.open(filelist[0]).data
+				for impath in filelist[0::]:
+					imdata = fabio.open(impath).data
+					CompositeArray = numpy.vstack([CompositeArray,imdata])
+			elif SpecimenPosition[1] - SpecimenPosition[0] < 0:
+				CompositeArray = fabio.open(filelist[0]).data
+				for impath in filelist[0::]:
+					imdata = fabio.open(impath).data
+					CompositeArray = numpy.vstack([imdata,CompositeArray])
 	return SpecimenPosition,CompositeArray
+
+
+def CreateAverageFromScan(wdname,sf,scannumber):
+	"""
+	Create an average of all files of the scan (used for ex. for background determination)
+	@param wdname : working directory name
+	@type wdname : string
+	@param sf: specfile object
+	@type sf: specfile object
+	"""
+	filelist = CreateScanDataFileList(wdname,sf,scannumber)
+	nbfiles = len(filelist)
+	CompositeArray = fabio.open(filelist[0]).data
+	for impath in filelist[1::]:
+		imdata = fabio.open(impath).data
+		CompositeArray = CompositeArray + imdata
+	CompositeArray = numpy.divide(CompositeArray,float(nbfiles))
+	return CompositeArray
+
+if __name__ == "__main__":
+	wdname = '/Users/labo/Folder/ESRF/DATA/d_2012-07-29_inh_hygro-wood/'
+	sfpath_mat = 'DATA/sample1/sample1.dat'
+	import sys
+	sys.path.append('.'+'/Tools/')
+	import SpecTools
+	sf_mat = SpecTools.specfile.Specfile(wdname + sfpath_mat)
+	ScanBackAt55pc = '9'
+	Back = CreateAverageFromScan(wdname,sf_mat,ScanBackAt55pc)
+	scannumber = '6'
+	SpecimenPos, Composite = CreateCompositeFromScan(wdname,sf_mat,scannumber,background=Back)
+	import DisplayTools
+	DisplayTools.display_image_from_array(Composite)
+	#scannumber = '9'
+	#CreateAverageFromScan(wdname,sf_mat,scannumber)

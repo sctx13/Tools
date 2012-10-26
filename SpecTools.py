@@ -55,7 +55,7 @@ def get_ScanMeasurement(sf,scannumber,motorlabel):
 		measurement = data[pos_motor]
 	return measurement
 
-def get_ScanMeasurementsAlongTime(sf,scannumber,motorlabels):
+def get_ScanMeasurementsAlongTime(sf,scannumber,motorlabel):
 	"""
 	Retrieve the measurements of a motor label against time
 	@type sf : specfile object from specfile module

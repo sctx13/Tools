@@ -58,29 +58,47 @@ def CreateCompositeFromScan(wdname,sf,scannumber,background=None,roi=((0,0),(512
 	# TODO : display a statut bar on file number to display or else 
 	# TODO : arrange to get the binning value in the roi
 	# TODO : arrange this to fill in the composite according to positions
+	# TODO : create an optional parameter roic (region of interest centered) with 3 parameters Xc, Yc, Radius pixels
+	print 'Calculating composite of scan ',scannumber, '...'
 	# Create the list of the specified scan :
 	filelist = CreateScanDataFileList(wdname,sf,scannumber)
 	#print filelist[0]
 	#print filelist[-1]
 	# Retrieve the size of the image :
 	ImShape = fabio.open(filelist[0]).data.shape
+	print '    . Image complete size =', ImShape
 	# Handle background image :
 	if background == None:
-		print "No background specified !"
+		print "    . No background specified !"
 		background = numpy.zeros(ImShape)
 	ImSize = ImShape #Necessary for ROI implementation
-	# Create specimen position definition list
+	# TODO create the definition of ROI
+	print '    . Image localized size =',ImSize 
+	# Definition of the composite :
 	scan_command_field = SpecTools.get_ScanCommandField(sf,scannumber)
 	scan_command_type = scan_command_field.split()[2]
 	if scan_command_type == 'mesh':
-		# Get the number of images :
-		MeshShape = (int(scan_command_field.split()[6])+1,int(scan_command_field.split()[10])+1)
-		# Create an zero array of the composite image :
-		CompositeArray = numpy.zeros((MeshShape[0]*ImSize[0],MeshShape[1]*ImSize[1]))
-		print "Empty Composite image of (%i,%i) shape created."%(CompositeArray.shape[0],CompositeArray.shape[1])
-		# Get the positions of each image along Motor1 and Motor2
+		#    Define the composite shape according to the scan command :
+		CompositeShape = (int(scan_command_field.split()[6])+1,int(scan_command_field.split()[10])+1)
+	elif scan_command_type == 'ascan':
+		#    Detect if it is a verticel or horizontal scan to define correctly the mesh :
+		Motor = scan_command_field.split()[3]
+		if Motor == 'nny' or 'stry':# Case of horizontal scan
+			CompositeShape = (1,int(scan_command_field.split()[6])+1)
+		elif Motor == 'nnz' or 'strz':# Case of vetical scan
+			CompositeShape = (int(scan_command_field.split()[6])+1,1)
+	print '    . Composite shape =', CompositeShape
+	# Initialization of the composite image :
+	CompositeArray = numpy.empty((CompositeShape[0]*ImSize[0],CompositeShape[1]*ImSize[1]))
+	CompositeArray.fill(numpy.nan)
+	print '    . Composite size =',CompositeArray.shape
+	# Fill in the composite image :
+	if scan_command_type == 'mesh':
+		#     Get the positions of each image along Motor1 and Motor2
+		#     TODO : chek the orientation of mesh. Actually Motor1 is supposed to be horizontal (nny) and Motor2 vertical
 		Motor1   = scan_command_field.split()[3]
 		Motor2   = scan_command_field.split()[7]
+		print '    . Motor used =',(Motor1,Motor2)
 		SpecimenPosition1 = SpecTools.get_ScanMeasurement(sf,scannumber,Motor1)
 		SpecimenPosition2 = SpecTools.get_ScanMeasurement(sf,scannumber,Motor2)
 		SpecimenPosition = [SpecimenPosition1,SpecimenPosition2]
@@ -88,33 +106,36 @@ def CreateCompositeFromScan(wdname,sf,scannumber,background=None,roi=((0,0),(512
 		Max1 = max(SpecimenPosition1)
 		Min2 = min(SpecimenPosition2)
 		Max2 = max(SpecimenPosition2)
-		Delta1 = round((Max1-Min1)/(MeshShape[0]-1),3)# [nm]
-		Delta2 = round((Max2-Min2)/(MeshShape[1]-1),3)# [nm]
+		Delta1 = round((Max1-Min1)/(CompositeShape[0]-1),3)# [nm]
+		Delta2 = round((Max2-Min2)/(CompositeShape[1]-1),3)# [nm]
+		print '    . Step between images [um] =',(Delta1*1e3,Delta2*1e3)
 		idx = 0# Number of the file in the list
 		for impath in filelist[0::]:
+			#TODO verify this definitions is SpecimenPosition are in positive values 
 			Deltax1 = round(SpecimenPosition1[idx] - min(SpecimenPosition1),3)
 			Deltax2 = round(SpecimenPosition2[idx] - min(SpecimenPosition2),3)
 			idx1 = int(Deltax1 / Delta1)
 			idx2 = int(Deltax2 / Delta2)
 			imdata = fabio.open(impath).data
+			#TODO : verify this definition (+1 strange !)
+			#TODO : backgournd have to be roi selected to correspond to imdata size
 			CompositeArray[0+idx1*ImSize[0]:(ImSize[0]-1)+idx1*ImSize[0]+1,0+idx2*ImSize[1]:(ImSize[1]-1)+idx2*ImSize[1]+1] = imdata - background
 			idx = idx+1
 	elif scan_command_type == 'ascan':
-		ScanShape = int(scan_command_field.split()[6])+1
-		Motor = scan_command_field.split()[3]
-		if Motor == 'nny' or 'stry':
-			# Case of horizontal scan : 
+		if Motor == 'nny' or 'stry':#Case of horizontal scan
 			SpecimenPosition = SpecTools.get_ScanMeasurement(sf,scannumber,Motor)
-			if SpecimenPosition[1] - SpecimenPosition[0] > 0:
-				CompositeArray = fabio.open(filelist[0]).data
-				for impath in filelist[0::]:
+			idx = 0
+			if SpecimenPosition[1] - SpecimenPosition[0] > 0:# Specimen moving from left to right from beam point of view
+				for impath in filelist:
 					imdata = fabio.open(impath).data
-					CompositeArray = numpy.hstack([CompositeArray,imdata])
+					CompositeArray[0:ImSize[0],idx*ImSize[1]:ImSize[1]+idx*ImSize[1]] = imdata
+					idx = idx+1
+		"""
 			elif SpecimenPosition[1] - SpecimenPosition[0] < 0:
 				CompositeArray = fabio.open(filelist[0]).data
-				for impath in filelist[0::]:
-					imdata = fabio.open(impath).data
-					CompositeArray = numpy.hstack([imdata,CompositeArray])
+				#for impath in filelist[0::]:
+				#	imdata = fabio.open(impath).data
+				#	CompositeArray = numpy.hstack([imdata,CompositeArray])
 		if Motor == 'nnz' or 'strz':
 			# Case of vertical scan : 
 			SpecimenPosition = SpecTools.get_ScanMeasurement(sf,scannumber,Motor)
@@ -128,6 +149,8 @@ def CreateCompositeFromScan(wdname,sf,scannumber,background=None,roi=((0,0),(512
 				for impath in filelist[0::]:
 					imdata = fabio.open(impath).data
 					CompositeArray = numpy.vstack([imdata,CompositeArray])
+	"""
+	print 'Calculation of composite finished !'
 	return SpecimenPosition,CompositeArray
 
 
@@ -157,9 +180,14 @@ if __name__ == "__main__":
 	sf_mat = SpecTools.specfile.Specfile(wdname + sfpath_mat)
 	ScanBackAt55pc = '9'
 	Back = CreateAverageFromScan(wdname,sf_mat,ScanBackAt55pc)
-	scannumber = '6'
-	SpecimenPos, Composite = CreateCompositeFromScan(wdname,sf_mat,scannumber,background=Back)
-	import DisplayTools
-	DisplayTools.display_image_from_array(Composite)
-	#scannumber = '9'
-	#CreateAverageFromScan(wdname,sf_mat,scannumber)
+	# Test of calculation of mesh composite image and display :
+	#scannumberMesh = '6'
+	#SpecimenPosMesh, CompositeMesh = CreateCompositeFromScan(wdname,sf_mat,scannumberMesh,background=Back)
+	#import DisplayTools
+	#DisplayTools.display_image_from_array(CompositeMesh)
+	#DisplayTools.display_PIL(CompositeMesh)
+	# Test of calculation of scan composite image and display :
+	scannumberScan = '7'
+	SpecimenPosScan, CompositeScan = CreateCompositeFromScan(wdname,sf_mat,scannumberScan,background=Back)
+	#DisplayTools.display_image_from_array(CompositeScan)
+	#DisplayTools.display_PIL(CompositeScan)

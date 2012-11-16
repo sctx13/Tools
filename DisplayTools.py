@@ -49,7 +49,7 @@ def display_image_from_array(nparray,colory='binary',roi=None):
 		nparraydsp = nparray[int(nparray.shape[0]/2)-int(roi[0])/2:int(nparray.shape[0]/2)+int(roi[0])/2,int(nparray.shape[1]/2)-int(roi[1])/2:int(nparray.shape[1]/2)+int(roi[1])/2]
 	fig = pylab.figure()
     #Display array with grayscale intensity and no pixel smoothing interpolation
-	pylab.imshow(numpy.log(nparraydsp),cmap=colory,interpolation='nearest')#,origin='lower')
+	pylab.imshow(nparraydsp,cmap=colory,interpolation='nearest')#,origin='lower')
 	pylab.colorbar()
 	pylab.axis('off')
 

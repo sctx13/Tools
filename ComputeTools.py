@@ -163,12 +163,16 @@ def CreateAverageFromScan(wdname,sf,scannumber):
 	@type sf: specfile object
 	"""
 	filelist = CreateScanDataFileList(wdname,sf,scannumber)
+	print 'Calculating the average image of scan ',scannumber, '...'	
+	print '    . First file =', filelist[0]
+	print '    . Last  file =', filelist[-1]
 	nbfiles = len(filelist)
 	CompositeArray = fabio.open(filelist[0]).data
 	for impath in filelist[1::]:
 		imdata = fabio.open(impath).data
 		CompositeArray = CompositeArray + imdata
 	CompositeArray = numpy.divide(CompositeArray,float(nbfiles))
+	print ' -> Average image calculated.' 
 	return CompositeArray
 
 if __name__ == "__main__":

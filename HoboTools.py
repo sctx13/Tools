@@ -43,3 +43,34 @@ def get_HoboData(path):
 	data_RH = numpy.array(data_RH)
 	return date , data_T, data_RH
 
+def display_env_data(Time,Temp,RH):
+	"""
+	Display double Y axis with temperature and relative humidity
+	@param Time : instant of measurements
+	@type  Time : 1d nparray of datetime values
+	@param Temp : measurement of the temperature
+	@type  Temp : 1d nparray size like parameter Time with float64 values
+	@param   RH : measurements of the relative humidity
+	@type    RH : 1d nparray size like parameter Time with float64 values
+	"""
+	import pylab
+	pylab.ion()
+	fig = pylab.figure(figsize=(8,4))
+	pylab.title('Hygrothermal environment near sample along the experiment')
+	ax1 = fig.add_subplot(111)
+	ax1.plot(Time,Temp,'rx',markersize=1,label='Temperature')
+	ax1.set_xlabel('Date [calendar]')
+	ax1.set_ylabel('Temperature ['u'\u00B0''C]',color='r')
+	#ax1.set_ylim((21,23))
+	for tl in ax1.get_yticklabels():
+		tl.set_color('r')
+	ax2=ax1.twinx()
+	ax2.plot(Time,RH,'bx',markersize=1,label='RH')
+	ax2.set_ylabel('Relative Humidity [%]',color='b')
+	#ax2.set_ylim((40,60))
+	for tl in ax2.get_yticklabels():
+		tl.set_color('b')
+	pylab.grid(True)
+
+
+
